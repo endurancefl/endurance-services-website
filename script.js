@@ -63,6 +63,7 @@ contactForm.addEventListener('submit', (e) => {
 
     fetch('https://script.google.com/macros/s/AKfycbxx6nZGXBZ9jk-oeheHK9aQ8NdSq9-0vx0LFNouat8H-N7Yj_4ED529O_vjxH0luU-5/exec', {
         method: 'POST',
+        mode: 'no-cors',
         body: JSON.stringify(data)
     })
     .then(() => {

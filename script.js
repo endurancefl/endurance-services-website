@@ -1,15 +1,18 @@
 // Hero video: play from 6s to 12s, no loop
 const heroVideo = document.getElementById('heroVideo');
-heroVideo.currentTime = 6;
-heroVideo.addEventListener('canplay', () => {
+heroVideo.addEventListener('loadedmetadata', () => {
     heroVideo.currentTime = 6;
-    heroVideo.play();
+});
+heroVideo.addEventListener('seeked', function onSeeked() {
+    heroVideo.play().catch(() => {});
+    heroVideo.removeEventListener('seeked', onSeeked);
 });
 heroVideo.addEventListener('timeupdate', () => {
     if (heroVideo.currentTime >= 12) {
         heroVideo.pause();
     }
 });
+heroVideo.load();
 
 // Navbar scroll effect
 const navbar = document.getElementById('navbar');

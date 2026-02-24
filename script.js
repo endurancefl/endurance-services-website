@@ -79,14 +79,17 @@ contactForm.addEventListener('submit', (e) => {
     });
 });
 
-// Shrink values text to fit on one line
+// Shrink values text to fit on one line (desktop only)
 function fitValuesText() {
     document.querySelectorAll('.values-block p').forEach(p => {
-        p.style.fontSize = '1rem';
-        var parent = p.closest('.values-block');
-        var maxWidth = parent.offsetWidth;
-        while (p.scrollWidth > maxWidth && parseFloat(p.style.fontSize) > 0.5) {
-            p.style.fontSize = (parseFloat(p.style.fontSize) - 0.02) + 'rem';
+        p.style.fontSize = '';
+        if (window.innerWidth > 768) {
+            p.style.fontSize = '1rem';
+            var parent = p.closest('.values-block');
+            var maxWidth = parent.offsetWidth;
+            while (p.scrollWidth > maxWidth && parseFloat(p.style.fontSize) > 0.5) {
+                p.style.fontSize = (parseFloat(p.style.fontSize) - 0.02) + 'rem';
+            }
         }
     });
 }

@@ -478,7 +478,6 @@ ul {
     line-height: 1.6;
     margin-bottom: 8px;
     white-space: nowrap;
-    width: fit-content;
 }
 
 .values-block p:last-child {
@@ -784,6 +783,10 @@ ul {
 }
 
 @media (max-width: 768px) {
+    .values-block p {
+        white-space: normal;
+    }
+
     .nav-toggle {
         display: flex;
     }

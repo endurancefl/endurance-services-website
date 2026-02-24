@@ -477,6 +477,8 @@ ul {
     color: var(--color-gray-600);
     line-height: 1.6;
     margin-bottom: 8px;
+    white-space: nowrap;
+    width: fit-content;
 }
 
 .values-block p:last-child {

@@ -113,7 +113,7 @@ const observer = new IntersectionObserver((entries) => {
 }, observerOptions);
 
 // Apply reveal animation to sections
-document.querySelectorAll('.service-card, .feature, .about-content, .contact-info, .contact-form-wrapper').forEach(el => {
+document.querySelectorAll('.service-card, .feature, .about-content, .blower-content, .blower-comparison, .contact-info, .contact-form-wrapper').forEach(el => {
     el.style.opacity = '0';
     el.style.transform = 'translateY(20px)';
     el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';

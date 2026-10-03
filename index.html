@@ -134,7 +134,8 @@
         const TOP = Math.min(...chips.map(c => c.hy)), BOTTOM = Math.max(...chips.map(c => c.hy));
         let reformEnd = 0, fadeFrom = 1;
         const ADDRESS_FADE = 900;     // ms for the address to fade away once the pieces start flying back
-        let gx = 0, gy = 1, quiet = 0, running = false, reformT0 = 0;
+        const gx = 0, gy = 1;
+        let quiet = 0, running = false, reformT0 = 0;
         const G = 0.45;               // gravity, px per frame squared at 60fps
 
         function draw() {
@@ -171,7 +172,6 @@
                 c.vx *= 0.985; c.vy *= 0.985;
                 c.x += c.vx; c.y += c.vy; c.a += c.va; c.va *= 0.97;
                 if (c.y > H - R) { c.y = H - R; c.vy *= -0.25; c.vx *= 0.9; c.va *= 0.8; }
-                if (c.y < R) { c.y = R; c.vy *= -0.25; }
                 if (c.x < R) { c.x = R; c.vx *= -0.3; }
                 if (c.x > W - R) { c.x = W - R; c.vx *= -0.3; }
             }
@@ -251,15 +251,22 @@
             address.setAttribute('aria-hidden', 'false');
         }
 
-        function crumble() {
+        function crumble(tx, ty) {
+            // Pieces burst up and away from where the iceberg was tapped; the closest ones fly hardest.
             mode = 'fallen';
             showAddress();
-            const cx = W / 2;
+            const k = H / 900, reach = 900 * scale * 0.35;
             for (const c of chips) {
                 c.x = homeX(c); c.y = homeY(c); c.a = 0;
-                c.vx = (c.x - cx) * 0.02 + (Math.random() - 0.5) * 3;
-                c.vy = -Math.random() * 4 - 1;
-                c.va = (Math.random() - 0.5) * 0.25;
+                const dx = c.x - tx, dy = c.y - ty, d = Math.hypot(dx, dy) || 1;
+                const near = Math.exp(-d / reach);
+                // Each piece gets its own speed and a slightly different angle, so they spray apart.
+                const spread = (Math.random() - 0.5) * 0.9, kick = 0.5 + Math.random();
+                const ux = Math.cos(spread) * dx / d - Math.sin(spread) * dy / d;
+                const uy = Math.sin(spread) * dx / d + Math.cos(spread) * dy / d;
+                c.vx = ux * (3 + 11 * near) * k * kick;
+                c.vy = (uy * (2 + 6 * near) - (4 + 8 * near) * kick - Math.random() * 3) * k;
+                c.va = (Math.random() - 0.5) * (0.15 + 0.4 * near);
             }
             wake();
         }
@@ -283,22 +290,11 @@
             return x >= ox + 60 * scale && x <= ox + 840 * scale && y >= oy + 110 * scale && y <= oy + 800 * scale;
         }
 
-        let askedForTilt = false;
-        function askForTilt() {
-            // iPhone asks the visitor once; other phones just start sending tilt.
-            if (askedForTilt) return;
-            askedForTilt = true;
-            if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission().catch(() => {});
-            }
-        }
-
         canvas.addEventListener('click', e => {
             if (reduceMotion) return;
             if (mode === 'whole') {
                 if (!overLogo(e.clientX, e.clientY)) return;
-                askForTilt();
-                crumble();
+                crumble(e.clientX, e.clientY);
             } else if (mode === 'fallen') {
                 reform();
             }
@@ -306,29 +302,11 @@
         canvas.addEventListener('keydown', e => {
             if (reduceMotion || (e.key !== 'Enter' && e.key !== ' ')) return;
             e.preventDefault();
-            if (mode === 'whole') crumble(); else if (mode === 'fallen') reform();
+            if (mode === 'whole') crumble(W / 2, H / 2); else if (mode === 'fallen') reform();
         });
         canvas.addEventListener('pointermove', e => {
             if (e.pointerType !== 'mouse') return;
             canvas.classList.toggle('over-logo', mode !== 'whole' || overLogo(e.clientX, e.clientY));
-            if (mode !== 'fallen') return;
-            const t = (e.clientX / W - 0.5) * 2;
-            setGravity(t * 0.9, 1 - Math.abs(t) * 0.3);
-        });
-        canvas.addEventListener('pointerleave', () => setGravity(0, 1));
-
-        function setGravity(x, y) {
-            if (Math.abs(x - gx) + Math.abs(y - gy) > 0.02) { gx = x; gy = y; if (mode === 'fallen') wake(); }
-        }
-        window.addEventListener('deviceorientation', e => {
-            if (e.gamma == null || e.beta == null) return;
-            // Turn the phone's tilt into a direction on screen, whichever way it is held.
-            const angle = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
-            let x = Math.sin(e.gamma * Math.PI / 180), y = Math.sin(e.beta * Math.PI / 180);
-            if (angle === 90) [x, y] = [y, -x];
-            else if (angle === -90 || angle === 270) [x, y] = [-y, x];
-            else if (angle === 180) [x, y] = [-x, -y];
-            setGravity(x * 1.6, Math.max(0.25, y * 1.6));
         });
 
         window.addEventListener('resize', () => {

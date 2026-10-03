@@ -75,8 +75,8 @@
 </head>
 <body>
     <div class="address" id="address" aria-hidden="true">
-        <div class="street">2586 N Orange Blossom Trail<br>Orlando, FL 32804</div>
-        <div class="by-appt">By Appointment Only</div>
+        <div class="street"><span class="line">2586 N Orange Blossom Trail</span><br><span class="line">Orlando, FL 32804</span></div>
+        <div class="by-appt"><span class="line">By Appointment Only</span></div>
     </div>
     <canvas id="berg" role="img" aria-label="Endurance Services" tabindex="0"></canvas>
     <noscript><img src="images/iceberg-icon.png" alt="Endurance Services"></noscript>
@@ -137,6 +137,21 @@
         const ADDRESS_FADE = 900;     // ms for the address to fade away once the pieces start flying back
         const gx = 0, gy = 1;
         let quiet = 0, running = false, reformT0 = 0;
+
+        // The address is one solid block once it shows: pieces bounce off it and pile up on top.
+        const lineEls = [...document.querySelectorAll('#address .line')];
+        let solids = [];
+        function readSolids() {
+            if (!address.classList.contains('show')) { solids = []; return; }
+            const boxes = lineEls.map(el => el.getBoundingClientRect());
+            const trim = boxes[0].height * 0.14;
+            solids = [{ l: Math.min(...boxes.map(b => b.left)), r: Math.max(...boxes.map(b => b.right)),
+                        t: boxes[0].top + trim, b: boxes[boxes.length - 1].bottom - trim * 0.5 }];
+        }
+        function overAddress(x, y) {
+            readSolids();
+            return solids.some(s => x >= s.l - 12 && x <= s.r + 12 && y >= s.t - 12 && y <= s.b + 12);
+        }
         const G = 0.45;               // gravity, px per frame squared at 60fps
 
         function draw() {
@@ -171,10 +186,21 @@
             for (const c of chips) {
                 c.vx += gx * G; c.vy += gy * G;
                 c.vx *= 0.985; c.vy *= 0.985;
+                const prevY = c.y;
                 c.x += c.vx; c.y += c.vy; c.a += c.va; c.va *= 0.97;
                 if (c.y > H - R) { c.y = H - R; c.vy *= -0.25; c.vx *= 0.9; c.va *= 0.8; }
                 if (c.x < R) { c.x = R; c.vx *= -0.3; }
                 if (c.x > W - R) { c.x = W - R; c.vx *= -0.3; }
+                // The address is a ledge: pieces fly up through it, and land on top of it coming down.
+                // Only pieces a blast has thrown land there, so the first reveal stays clean.
+                if (c.blasted && c.vy >= 0) {
+                    for (const s of solids) {
+                        const top = s.t - R;
+                        if (c.x >= s.l && c.x <= s.r && prevY <= top + 0.5 && c.y >= top) {
+                            c.y = top; c.vy *= -0.2; c.vx *= 0.85; c.va *= 0.7;
+                        }
+                    }
+                }
             }
             // Chips push each other apart; neighbours found through a coarse grid.
             const size = R * 2.4, grid = new Map(), key = (i, j) => i * 100000 + j;
@@ -213,6 +239,7 @@
                 // Same speed on 60Hz and 120Hz screens.
                 const steps = last ? Math.max(1, Math.min(3, Math.round((now - last) / 16.7))) : 1;
                 let fastest = 0;
+                readSolids();
                 for (let s = 0; s < steps; s++) fastest = step();
                 quiet = fastest < 0.08 ? quiet + 1 : 0;
             }
@@ -238,7 +265,7 @@
                 }
             }
             draw();
-            // Rest when the pile has settled; a tilt or resize wakes it.
+            // Rest when the pile has settled; a blast or resize wakes it.
             if (mode === 'whole' || (mode === 'fallen' && quiet > 90)) { running = false; last = 0; return; }
             requestAnimationFrame(tick);
         }
@@ -258,7 +285,7 @@
             showAddress();
             const k = H / 900, reach = 900 * scale * 0.35;
             for (const c of chips) {
-                c.x = homeX(c); c.y = homeY(c); c.a = 0;
+                c.x = homeX(c); c.y = homeY(c); c.a = 0; c.blasted = false;
                 const dx = c.x - tx, dy = c.y - ty, d = Math.hypot(dx, dy) || 1;
                 const near = Math.exp(-d / reach);
                 // Each piece gets its own speed and a slightly different angle, so they spray apart.
@@ -268,6 +295,22 @@
                 c.vx = ux * (3 + 11 * near) * k * kick;
                 c.vy = (uy * (2 + 6 * near) - (4 + 8 * near) * kick - Math.random() * 3) * k;
                 c.va = (Math.random() - 0.5) * (0.15 + 0.4 * near);
+            }
+            wake();
+        }
+        // A tap on the pile: a little explosion that throws the nearby pieces up and away.
+        function blast(x, y) {
+            const reach = Math.max(70, Math.min(W, H) * 0.25), k = H / 900;
+            for (const c of chips) {
+                const dx = c.x - x, dy = c.y - y, d = Math.hypot(dx, dy) || 1;
+                if (d > reach) continue;
+                const f = 1 - d / reach, kick = 0.7 + Math.random() * 0.6;
+                c.blasted = true;
+                c.vx += (dx / d) * (2 + 6 * f) * k * kick;
+                // strong enough to throw pieces from the floor up past the address, never far off the top
+                c.vy += ((dy / d) * (2 + 6 * f)) * k - (4 + 24 * Math.pow(f, 0.7)) * kick * Math.sqrt(k);
+                c.vy = Math.max(c.vy, -Math.sqrt(2 * G * H * 0.92));
+                c.va += (Math.random() - 0.5) * 0.5 * f;
             }
             wake();
         }
@@ -297,7 +340,9 @@
                 if (!overLogo(e.clientX, e.clientY)) return;
                 crumble(e.clientX, e.clientY);
             } else if (mode === 'fallen') {
-                reform();
+                // only the address puts the iceberg back together; anywhere else sets off a blast
+                if (overAddress(e.clientX, e.clientY)) reform();
+                else blast(e.clientX, e.clientY);
             }
         });
         canvas.addEventListener('keydown', e => {

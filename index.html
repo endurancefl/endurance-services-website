@@ -41,377 +41,271 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500&family=Inter:wght@500&display=swap" rel="stylesheet">
     <style>
-        html, body {
-            margin: 0;
-            height: 100%;
-            background: #ffffff;
-            overflow: hidden;
-        }
-        canvas {
-            position: fixed;
-            z-index: 1;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            display: block;
-            touch-action: none;
-            -webkit-tap-highlight-color: transparent;
-            outline: none;
-        }
-        canvas.over-logo { cursor: pointer; }
-        .address {
-            position: fixed;
-            inset: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 0.35em;
-            padding: 0 24px;
-            text-align: center;
-            color: #274637;
-            opacity: 0;
-            transform: translateY(8px);
-            pointer-events: none;
-        }
-        .address.show {
-            opacity: 1;
-            transform: none;
-            transition: opacity 0.9s ease 0.35s, transform 0.9s ease 0.35s;
-        }
-        .address .street {
-            font-family: "Oswald", "Arial Narrow", sans-serif;
-            font-weight: 500;
-            font-size: 16px; /* set by the script to fit inside the iceberg */
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-            line-height: 1.25;
-            white-space: nowrap;
-        }
-        .address .by-appt {
-            font-family: "Inter", system-ui, sans-serif;
-            font-weight: 500;
-            font-size: 9px; /* set by the script */
-            letter-spacing: 0.18em;
-            text-transform: uppercase;
-            opacity: 0.75;
-        }
-        /* there for search engines and screen readers; never shown */
-        .visually-hidden {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            margin: -1px;
-            padding: 0;
-            overflow: hidden;
-            clip: rect(0 0 0 0);
-            white-space: nowrap;
-            border: 0;
-        }
-        noscript img {
-            position: fixed;
-            inset: 0;
-            margin: auto;
-            width: min(60vw, 60vh, 480px);
-        }
+
+  :root { --ground: #ffffff; --berg: #274637; color-scheme: light; }
+  html, body { height: 100%; }
+  body { background: var(--ground); overflow: hidden; margin: 0; }
+  .address { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .35em; text-align: center; color: var(--berg); pointer-events: none; }
+  .street { font-family: "Oswald", "Arial Narrow", sans-serif; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; line-height: 1.25; white-space: nowrap; font-size: 16px; }
+  .appt { font-family: "Inter", system-ui, sans-serif; font-weight: 500; text-transform: uppercase; letter-spacing: .18em; opacity: .75; font-size: 9px; }
+  canvas:focus { outline: none; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; -webkit-tap-highlight-color: transparent; cursor: crosshair; }
+
+  /* there for search engines and screen readers; never shown */
+  .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  noscript img { position: fixed; inset: 0; margin: auto; width: min(60vw, 60vh, 480px); }
     </style>
 </head>
 <body>
     <h1 class="visually-hidden">Endurance Services</h1>
-    <div class="address" id="address" aria-hidden="true">
-        <div class="street"><span class="line">2586 N Orange Blossom Trail</span><br><span class="line">Orlando, FL 32804</span></div>
-        <div class="by-appt"><span class="line">By Appointment Only</span></div>
-    </div>
-    <canvas id="berg" role="img" aria-label="Endurance Services" tabindex="0"></canvas>
+<div class="address" id="address" aria-label="2586 N Orange Blossom Trail, Orlando, FL 32804. By appointment only.">
+  <div class="street" id="street">2586 N Orange Blossom Trail<br>Orlando, FL 32804</div>
+  <div class="appt" id="appt">By Appointment Only</div>
+</div>
+<canvas id="c" tabindex="0" role="img" aria-label="Endurance Services iceberg. Tap to blast pieces off it."></canvas>
     <noscript><img src="images/iceberg-icon.png" alt="Endurance Services"></noscript>
     <script>
-    (() => {
-        const GREEN = '#274637';
-        // The iceberg traced from images/iceberg-icon.png, in its own 900 x 900 space.
-        const LOGO = new Path2D('M733,399 691,320 633,294 604,344 602,344 613,276 511,120 380,255 265,274 166,400Z M512,137 492,291 414,344 533,331 576,376 582,385 218,384 273,284 376,267 363,335 405,247 494,153Z M65,419 65,437 165,437 196,465 262,483 269,456 272,453 272,502 294,651 375,687 416,786 505,704 506,541 527,609 607,555 652,459 658,510 684,525 735,437 834,437 834,419Z M437,447 380,524 380,582 359,525 387,451 390,447Z');
-        const canvas = document.getElementById('berg');
-        const ctx = canvas.getContext('2d');
-        const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+(() => {
+  const GREEN = '#274637';
+  const LOGO = new Path2D('M733,399 691,320 633,294 604,344 602,344 613,276 511,120 380,255 265,274 166,400Z M512,137 492,291 414,344 533,331 576,376 582,385 218,384 273,284 376,267 363,335 405,247 494,153Z M65,419 65,437 165,437 196,465 262,483 269,456 272,453 272,502 294,651 375,687 416,786 505,704 506,541 527,609 607,555 652,459 658,510 684,525 735,437 834,437 834,419Z M437,447 380,524 380,582 359,525 387,451 390,447Z');
+  const canvas = document.getElementById('c'), ctx = canvas.getContext('2d');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-        // Cut the logo into small square chips (logo units).
-        const CELL = 20;
-        const chips = [];
-        for (let y = 110; y < 800; y += CELL) {
-            for (let x = 60; x < 840; x += CELL) {
-                // Any ink at all makes a chip, so together the chips are the whole logo, down to the thinnest edge.
-                let ink = 0;
-                for (let a = 0; a <= 10; a++) for (let b = 0; b <= 10; b++) {
-                    if (ctx.isPointInPath(LOGO, x + a * 2, y + b * 2, 'evenodd')) ink++;
-                }
-                if (ink > 0) chips.push({ hx: x, hy: y, x: 0, y: 0, vx: 0, vy: 0, a: 0, va: 0 });
-            }
-        }
+  // The iceberg's footprint, cut into small cells (logo units). Every cell can be blasted out;
+  // cells with ink become flying pieces, cells without ink just open a hole to the address behind.
+  const CELL = 14, X0 = 58, Y0 = 108, X1 = 842, Y1 = 802;
+  const cells = [];
+  for (let y = Y0; y < Y1; y += CELL) for (let x = X0; x < X1; x += CELL) {
+    let ink = 0;
+    for (let a = 0; a <= 7; a++) for (let b = 0; b <= 7; b++) if (ctx.isPointInPath(LOGO, x + a * 2, y + b * 2, 'evenodd')) ink++;
+    cells.push({ x, y, ink: ink > 0, inkAmount: ink, gone: false });
+  }
+  const TOTAL_INK = cells.reduce((sum, c) => sum + c.inkAmount, 0);
 
-        // Screen layout: the logo sits centered at min(60vw, 60vh, 480px), as before.
-        let W = 0, H = 0, scale = 1, ox = 0, oy = 0, R = 5;
-        function layout() {
-            const dpr = window.devicePixelRatio || 1;
-            W = window.innerWidth; H = window.innerHeight;
-            canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            const size = Math.min(W * 0.6, H * 0.6, 480);
-            scale = size / 900; ox = (W - size) / 2; oy = (H - size) / 2;
-            R = CELL * scale * 0.5;
-            fitAddress(size);
-        }
+  let W, H, dpr, scale, ox, oy, R;
+  const layer = document.createElement('canvas'), lctx = layer.getContext('2d');   // the standing iceberg
+  function layout() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const size = Math.min(W * 0.6, H * 0.6, 480);
+    scale = size / 900; ox = (W - size) / 2; oy = (H - size) / 2; R = CELL * scale * 0.5;
+    fitAddress(size);
+    paintLayer();
+  }
+  // The address is hidden behind the iceberg until holes are shot through it.
+  function fitAddress(size) {
+    const street = document.getElementById('street'), appt = document.getElementById('appt');
+    let px = Math.min(18, size * 0.045);
+    street.style.fontSize = px + 'px';
+    const room = 650 * (size / 900);
+    if (street.scrollWidth > room) { px *= room / street.scrollWidth; street.style.fontSize = px + 'px'; }
+    appt.style.fontSize = Math.max(7, px * 0.5) + 'px';
+  }
+  function paintLayer() {
+    layer.width = canvas.width; layer.height = canvas.height;
+    lctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    lctx.translate(ox, oy); lctx.scale(scale, scale);
+    // a white backing over the whole footprint keeps the address hidden until it is shot open
+    lctx.fillStyle = '#ffffff'; lctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+    lctx.fillStyle = GREEN; lctx.fill(LOGO, 'evenodd');
+    lctx.globalCompositeOperation = 'destination-out';
+    // all holes are cut in one pass, as one shape, so neighbouring holes leave no hairline seams
+    const holes = new Path2D();
+    for (const c of cells) if (c.gone) holes.rect(c.x, c.y, CELL, CELL);
+    lctx.fill(holes);
+    lctx.globalCompositeOperation = 'source-over';
+  }
 
-        // The address sits behind the iceberg and must fit inside its outline, so it is covered when the iceberg is whole.
-        const address = document.getElementById('address');
-        const street = address.querySelector('.street'), byAppt = address.querySelector('.by-appt');
-        function fitAddress(size) {
-            let px = Math.min(18, size * 0.045);
-            street.style.fontSize = px + 'px';
-            const room = 700 * (size / 900);
-            const wide = street.scrollWidth;
-            if (wide > room) { px *= room / wide; street.style.fontSize = px + 'px'; }
-            byAppt.style.fontSize = Math.max(7, px * 0.5) + 'px';
-        }
-        const homeX = c => ox + (c.hx + CELL / 2) * scale;
-        const homeY = c => oy + (c.hy + CELL / 2) * scale;
+  // ---------- flying pieces ----------
+  const pieces = [];
+  const G = 0.45;
+  function blast(tx, ty) {
+    const lx = (tx - ox) / scale, ly = (ty - oy) / scale;
+    const reach = 140 + Math.random() * 40;   // about ten good shots clear the whole iceberg
+    const k = Math.sqrt(H / 900);
+    let hit = 0;
+    for (const c of cells) {
+      if (c.gone) continue;
+      const cx = c.x + CELL / 2, cy = c.y + CELL / 2;
+      const d = Math.hypot(cx - lx, cy - ly);
+      // a ragged crater: each cell's own random threshold
+      if (d > reach * (0.7 + Math.random() * 0.45)) continue;
+      c.gone = true; hit++;
+      if (!c.ink) continue;
+      const f = 1 - Math.min(1, d / reach), dx = cx - lx, dy = cy - ly, dd = Math.hypot(dx, dy) || 1;
+      const spread = (Math.random() - 0.5) * 1.1, kick = 0.6 + Math.random() * 0.8;
+      const ux = Math.cos(spread) * dx / dd - Math.sin(spread) * dy / dd, uy = Math.sin(spread) * dx / dd + Math.cos(spread) * dy / dd;
+      pieces.push({ cell: c, x: ox + cx * scale, y: oy + cy * scale, a: 0,
+        vx: ux * (3 + 9 * f) * kick * k, vy: (uy * (2 + 5 * f) - (4 + 9 * f) * kick) * k, va: (Math.random() - 0.5) * 0.5 });
+    }
+    if (hit) paintLayer();
+    if (hit) { shake = reduce ? 0 : 1; wake(); }
+    // when only crumbs are left, they fall off on their own and the iceberg counts as cleared
+    const left = cells.reduce((sum, c) => sum + (c.gone ? 0 : c.inkAmount), 0);
+    if (!cleared && left <= TOTAL_INK * 0.05) {
+      for (const c of cells) {
+        if (c.gone) continue;
+        c.gone = true;
+        if (c.ink) pieces.push({ cell: c, x: ox + (c.x + CELL / 2) * scale, y: oy + (c.y + CELL / 2) * scale, a: 0,
+          vx: (Math.random() - 0.5) * 2, vy: -Math.random() * 2, va: (Math.random() - 0.5) * 0.3 });
+      }
+      paintLayer();
+      cleared = true; clearT0 = performance.now(); wake();
+    }
+    return hit;
+  }
 
-        let mode = 'whole';           // whole | fallen | reform
-        const SPREAD = 900;           // ms from the tip's row leaving to the bottom row leaving
-        const TOP = Math.min(...chips.map(c => c.hy)), BOTTOM = Math.max(...chips.map(c => c.hy));
-        let reformEnd = 0, fadeFrom = 1;
-        const ADDRESS_FADE = 900;     // ms for the address to fade away once the pieces start flying back
-        const gx = 0, gy = 1;
-        let quiet = 0, running = false, reformT0 = 0;
+  // A tap on the rocks at the bottom throws the nearby pieces up and away.
+  function kickPieces(x, y, upTo) {
+    const reach = Math.max(70, Math.min(W, H) * 0.25), k = H / 900;
+    let moved = 0;
+    for (let i = 0; i < upTo; i++) {
+      const p = pieces[i];
+      const dx = p.x - x, dy = p.y - y, d = Math.hypot(dx, dy) || 1;
+      if (d > reach) continue;
+      const f = 1 - d / reach, kick = 0.7 + Math.random() * 0.6;
+      p.vx += (dx / d) * (2 + 6 * f) * k * kick;
+      p.vy += ((dy / d) * (2 + 6 * f)) * k - (4 + 24 * Math.pow(f, 0.7)) * kick * Math.sqrt(k);
+      p.vy = Math.max(p.vy, -Math.sqrt(2 * G * H * 0.92));
+      p.va += (Math.random() - 0.5) * 0.5 * f;
+      moved++;
+    }
+    if (moved) wake();
+  }
 
-        // The address is one solid block once it shows: pieces bounce off it and pile up on top.
-        const lineEls = [...document.querySelectorAll('#address .line')];
-        let solids = [];
-        function readSolids() {
-            if (!address.classList.contains('show')) { solids = []; return; }
-            const boxes = lineEls.map(el => el.getBoundingClientRect());
-            const trim = boxes[0].height * 0.14;
-            solids = [{ l: Math.min(...boxes.map(b => b.left)), r: Math.max(...boxes.map(b => b.right)),
-                        t: boxes[0].top + trim, b: boxes[boxes.length - 1].bottom - trim * 0.5 }];
+  function stepPieces(f) {
+    for (const p of pieces) {
+      if (p.home) continue;
+      p.vy += G * f; p.vx *= 0.99; p.x += p.vx * f; p.y += p.vy * f; p.a += p.va * f; p.va *= 0.98;
+      if (p.y > H - R) { p.y = H - R; p.vy *= -0.25; p.vx *= 0.85; p.va *= 0.7; }
+      if (p.x < R) { p.x = R; p.vx *= -0.3; }
+      if (p.x > W - R) { p.x = W - R; p.vx *= -0.3; }
+    }
+    // pieces push each other apart so they pile instead of overlapping
+    const size = R * 2.4, grid = new Map(), key = (i, j) => i * 100000 + j, min = R * 1.8;
+    pieces.forEach((p, n) => { const kk = key(Math.floor(p.x / size), Math.floor(p.y / size)); if (!grid.has(kk)) grid.set(kk, []); grid.get(kk).push(n); });
+    pieces.forEach((p, n) => {
+      const ci = Math.floor(p.x / size), cj = Math.floor(p.y / size);
+      for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) {
+        const cell = grid.get(key(i, j)); if (!cell) continue;
+        for (const m of cell) {
+          if (m <= n) continue;
+          const o = pieces[m], dx = o.x - p.x, dy = o.y - p.y, d2 = dx * dx + dy * dy;
+          if (d2 > 0 && d2 < min * min) {
+            const d = Math.sqrt(d2), push = (min - d) / 2, ux = dx / d, uy = dy / d;
+            p.x -= ux * push; p.y -= uy * push; o.x += ux * push; o.y += uy * push;
+            const rv = (o.vx - p.vx) * ux + (o.vy - p.vy) * uy;
+            if (rv < 0) { p.vx += ux * rv * .5; p.vy += uy * rv * .5; o.vx -= ux * rv * .5; o.vy -= uy * rv * .5; }
+          }
         }
-        function overAddress(x, y) {
-            readSolids();
-            return solids.some(s => x >= s.l - 12 && x <= s.r + 12 && y >= s.t - 12 && y <= s.b + 12);
-        }
-        const G = 0.45;               // gravity, px per frame squared at 60fps
+      }
+    });
+    let fastest = 0;
+    for (const p of pieces) fastest = Math.max(fastest, Math.abs(p.vx), Math.abs(p.vy));
+    return fastest;
+  }
 
-        function draw() {
-            ctx.clearRect(0, 0, W, H);
-            ctx.fillStyle = GREEN;
-            if (mode === 'whole') {
-                ctx.save(); ctx.translate(ox, oy); ctx.scale(scale, scale);
-                ctx.fill(LOGO, 'evenodd'); ctx.restore();
-                return;
-            }
-            if (mode === 'reform') {
-                // Landed chips become one piece of the real logo, so there are no seams between them.
-                const landed = new Path2D();
-                for (const c of chips) if (c.k >= 1) landed.rect(c.hx, c.hy, CELL, CELL);
-                ctx.save(); ctx.translate(ox, oy); ctx.scale(scale, scale);
-                ctx.clip(landed); ctx.fill(LOGO, 'evenodd');
-                ctx.restore();
-            }
-            for (const c of chips) {
-                if (mode === 'reform' && c.k >= 1) continue;
-                ctx.save();
-                ctx.translate(c.x, c.y); ctx.rotate(c.a); ctx.scale(scale, scale);
-                ctx.translate(-c.hx - CELL / 2, -c.hy - CELL / 2);
-                ctx.beginPath(); ctx.rect(c.hx - 1.5, c.hy - 1.5, CELL + 3, CELL + 3); ctx.clip();
-                ctx.fill(LOGO, 'evenodd');
-                ctx.restore();
-            }
-        }
+  function drawPiece(p) {
+    const c = p.cell;
+    ctx.save();
+    ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.scale(scale, scale);
+    ctx.translate(-c.x - CELL / 2, -c.y - CELL / 2);
+    ctx.beginPath(); ctx.rect(c.x - 0.6, c.y - 0.6, CELL + 1.2, CELL + 1.2); ctx.clip();
+    ctx.fillStyle = GREEN; ctx.fill(LOGO, 'evenodd');
+    ctx.restore();
+  }
 
-        function step() {
-            let fastest = 0;
-            for (const c of chips) {
-                c.vx += gx * G; c.vy += gy * G;
-                c.vx *= 0.985; c.vy *= 0.985;
-                const prevY = c.y;
-                c.x += c.vx; c.y += c.vy; c.a += c.va; c.va *= 0.97;
-                if (c.y > H - R) { c.y = H - R; c.vy *= -0.25; c.vx *= 0.9; c.va *= 0.8; }
-                if (c.x < R) { c.x = R; c.vx *= -0.3; }
-                if (c.x > W - R) { c.x = W - R; c.vx *= -0.3; }
-                // The address is a ledge: pieces fly up through it, and land on top of it coming down.
-                // Only pieces a blast has thrown land there, so the first reveal stays clean.
-                if (c.blasted && c.vy >= 0) {
-                    for (const s of solids) {
-                        const top = s.t - R;
-                        if (c.x >= s.l && c.x <= s.r && prevY <= top + 0.5 && c.y >= top) {
-                            c.y = top; c.vy *= -0.2; c.vx *= 0.85; c.va *= 0.7;
-                        }
-                    }
-                }
-            }
-            // Chips push each other apart; neighbours found through a coarse grid.
-            const size = R * 2.4, grid = new Map(), key = (i, j) => i * 100000 + j;
-            chips.forEach((c, n) => {
-                const k = key(Math.floor(c.x / size), Math.floor(c.y / size));
-                if (!grid.has(k)) grid.set(k, []);
-                grid.get(k).push(n);
-            });
-            const min = R * 1.8;
-            for (let pass = 0; pass < 2; pass++) {
-                chips.forEach((c, n) => {
-                    const ci = Math.floor(c.x / size), cj = Math.floor(c.y / size);
-                    for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) {
-                        const cell = grid.get(key(i, j));
-                        if (!cell) continue;
-                        for (const m of cell) {
-                            if (m <= n) continue;
-                            const o = chips[m], dx = o.x - c.x, dy = o.y - c.y, d2 = dx * dx + dy * dy;
-                            if (d2 > 0 && d2 < min * min) {
-                                const d = Math.sqrt(d2), push = (min - d) / 2, ux = dx / d, uy = dy / d;
-                                c.x -= ux * push; c.y -= uy * push; o.x += ux * push; o.y += uy * push;
-                                const rv = (o.vx - c.vx) * ux + (o.vy - c.vy) * uy;
-                                if (rv < 0) { c.vx += ux * rv * 0.5; c.vy += uy * rv * 0.5; o.vx -= ux * rv * 0.5; o.vy -= uy * rv * 0.5; }
-                            }
-                        }
-                    }
-                });
-            }
-            for (const c of chips) fastest = Math.max(fastest, Math.abs(c.vx), Math.abs(c.vy));
-            return fastest;
-        }
+  // ---------- rebuild: every piece flies back to the hole it came from ----------
+  let rebuilding = false, rebuildT0 = 0, cleared = false, clearT0 = 0, backing = 1;
+  function rebuild() {
+    if (rebuilding || !cleared) return;
+    // the layer is empty by now (see the clear fade), so turning it back on shows nothing until pieces land
+    cleared = false; backing = 1;
+    rebuilding = true; rebuildT0 = performance.now();
+    const top = Y0, span = Y1 - Y0;
+    for (const p of pieces) {
+      p.sx = p.x; p.sy = p.y; p.sa = Math.atan2(Math.sin(p.a), Math.cos(p.a));
+      p.delay = (p.cell.y - top) / span * 700 + Math.random() * 200; p.fly = 550 + Math.random() * 250; p.k = 0;
+    }
+    wake();
+  }
+  function stepRebuild(now) {
+    const t = now - rebuildT0;
+    let done = true;
+    for (const p of pieces) {
+      p.k = Math.max(0, Math.min(1, (t - p.delay) / p.fly));
+      const e = 1 - Math.pow(1 - p.k, 3);
+      const hx = ox + (p.cell.x + CELL / 2) * scale, hy = oy + (p.cell.y + CELL / 2) * scale;
+      p.x = p.sx + (hx - p.sx) * e; p.y = p.sy + (hy - p.sy) * e; p.a = p.sa * (1 - e);
+      if (p.k < 1) done = false;
+    }
+    // landed pieces fill their holes for good; the white backing behind them returns row by row,
+    // just behind the landing pieces, so the address is covered from the tip down
+    const sweep = Y0 + (t - 760) / 700 * (Y1 - Y0);
+    let changed = false;
+    for (const p of pieces) if (p.k >= 1 && p.cell.gone) { p.cell.gone = false; changed = true; }
+    for (const c of cells) if (c.gone && !c.ink && c.y + CELL <= sweep) { c.gone = false; changed = true; }
+    if (changed) paintLayer();
+    if (done) {
+      for (const c of cells) c.gone = false;
+      pieces.length = 0; paintLayer(); rebuilding = false;
+    }
+  }
 
-        let last = 0;
-        function tick(now) {
-            if (mode === 'fallen') {
-                // Same speed on 60Hz and 120Hz screens.
-                const steps = last ? Math.max(1, Math.min(3, Math.round((now - last) / 16.7))) : 1;
-                let fastest = 0;
-                readSolids();
-                for (let s = 0; s < steps; s++) fastest = step();
-                quiet = fastest < 0.08 ? quiet + 1 : 0;
-            }
-            last = now;
-            if (mode === 'reform') {
-                // Every chip in a row leaves together, top row first, so the iceberg builds from the tip down.
-                // Each chip has its own slightly different timing, so they arrive as a swarm, not in rows.
-                const t = now - reformT0;
-                for (const c of chips) {
-                    c.k = Math.max(0, Math.min(1, (t - c.delay) / c.fly));
-                    const e = 1 - Math.pow(1 - c.k, 3);
-                    c.x = c.sx + (homeX(c) - c.sx) * e;
-                    c.y = c.sy + (homeY(c) - c.sy) * e;
-                    c.a = c.sa * (1 - e);
-                }
-                const fade = Math.max(0, 1 - t / ADDRESS_FADE);
-                address.style.opacity = (fadeFrom * fade * fade).toFixed(3);
-                if (t >= reformEnd) {
-                    mode = 'whole';
-                    address.classList.remove('show');
-                    address.style.transition = ''; address.style.opacity = '';
-                    address.setAttribute('aria-hidden', 'true');
-                }
-            }
-            draw();
-            // Rest when the pile has settled; a blast or resize wakes it.
-            if (mode === 'whole' || (mode === 'fallen' && quiet > 90)) { running = false; last = 0; return; }
-            requestAnimationFrame(tick);
-        }
-        function wake() {
-            quiet = 0;
-            if (!running) { running = true; requestAnimationFrame(tick); }
-        }
+  // ---------- loop ----------
+  let running = false, last = 0, quiet = 0, shake = 0;
+  function wake() { quiet = 0; if (!running) { running = true; last = 0; requestAnimationFrame(frame); } }
+  function frame(now) {
+    const dt = last ? Math.min(50, now - last) : 16.7; last = now;
+    const f = dt / 16.7;
+    let fastest = 0;
+    if (rebuilding) stepRebuild(now); else fastest = stepPieces(f);
+    quiet = fastest < 0.08 ? quiet + 1 : 0;
+    ctx.clearRect(0, 0, W, H);
+    // a small jolt of the standing iceberg on each hit
+    let sx = 0, sy = 0;
+    if (shake > 0) { sx = (Math.random() - 0.5) * 4 * shake; sy = (Math.random() - 0.5) * 3 * shake; shake = Math.max(0, shake - dt / 140); }
+    if (cleared && backing > 0) {
+      backing = Math.max(0, 1 - (now - clearT0) / 450);
+      // once faded, empty the layer for good so nothing can reappear when it is switched back on
+      if (backing === 0) { for (const c of cells) c.gone = true; paintLayer(); }
+    }
+    ctx.save(); ctx.globalAlpha = backing; ctx.setTransform(1, 0, 0, 1, sx * dpr, sy * dpr); ctx.drawImage(layer, 0, 0); ctx.restore();
+    for (const p of pieces) if (!(rebuilding && p.k >= 1)) drawPiece(p);
+    if (!rebuilding && quiet > 60 && shake <= 0 && !(cleared && backing > 0)) { running = false; return; }
+    requestAnimationFrame(frame);
+  }
 
-        function showAddress() {
-            address.classList.add('show');
-            address.setAttribute('aria-hidden', 'false');
-        }
+  function onAddress(x, y) {
+    const b = document.getElementById('address').querySelector('.street').getBoundingClientRect();
+    const a = document.getElementById('appt').getBoundingClientRect();
+    return x >= Math.min(b.left, a.left) - 14 && x <= Math.max(b.right, a.right) + 14 && y >= b.top - 14 && y <= a.bottom + 14;
+  }
+  canvas.addEventListener('pointerdown', e => {
+    if (rebuilding) return;
+    // once every bit of ice is gone, the address is the only thing left to tap: it puts the iceberg back
+    if (cleared && onAddress(e.clientX, e.clientY)) { rebuild(); return; }
+    // anywhere else: shoot whatever is there, the standing ice and the rocks on the ground
+    const before = pieces.length;     // pieces this shot breaks off already have their own kick
+    if (!cleared) blast(e.clientX, e.clientY);
+    kickPieces(e.clientX, e.clientY, before);
+  });
+  canvas.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    if (rebuilding) return;
+    if (cleared) { rebuild(); return; }
+    const left = cells.filter(c => c.ink && !c.gone);
+    const c = left[Math.floor(left.length / 2)];
+    if (c) blast(ox + (c.x + CELL / 2) * scale, oy + (c.y + CELL / 2) * scale);
+  });
+  addEventListener('resize', () => { layout(); for (const p of pieces) { p.x = Math.min(p.x, W - R); p.y = Math.min(p.y, H - R); } wake(); });
 
-        function crumble(tx, ty) {
-            // Pieces burst up and away from where the iceberg was tapped; the closest ones fly hardest.
-            mode = 'fallen';
-            showAddress();
-            const k = H / 900, reach = 900 * scale * 0.35;
-            for (const c of chips) {
-                c.x = homeX(c); c.y = homeY(c); c.a = 0; c.blasted = false;
-                const dx = c.x - tx, dy = c.y - ty, d = Math.hypot(dx, dy) || 1;
-                const near = Math.exp(-d / reach);
-                // Each piece gets its own speed and a slightly different angle, so they spray apart.
-                const spread = (Math.random() - 0.5) * 0.9, kick = 0.5 + Math.random();
-                const ux = Math.cos(spread) * dx / d - Math.sin(spread) * dy / d;
-                const uy = Math.sin(spread) * dx / d + Math.cos(spread) * dy / d;
-                c.vx = ux * (3 + 11 * near) * k * kick;
-                c.vy = (uy * (2 + 6 * near) - (4 + 8 * near) * kick - Math.random() * 3) * k;
-                c.va = (Math.random() - 0.5) * (0.15 + 0.4 * near);
-            }
-            wake();
-        }
-        // A tap on the pile: a little explosion that throws the nearby pieces up and away.
-        function blast(x, y) {
-            const reach = Math.max(70, Math.min(W, H) * 0.25), k = H / 900;
-            for (const c of chips) {
-                const dx = c.x - x, dy = c.y - y, d = Math.hypot(dx, dy) || 1;
-                if (d > reach) continue;
-                const f = 1 - d / reach, kick = 0.7 + Math.random() * 0.6;
-                c.blasted = true;
-                c.vx += (dx / d) * (2 + 6 * f) * k * kick;
-                // strong enough to throw pieces from the floor up past the address, never far off the top
-                c.vy += ((dy / d) * (2 + 6 * f)) * k - (4 + 24 * Math.pow(f, 0.7)) * kick * Math.sqrt(k);
-                c.vy = Math.max(c.vy, -Math.sqrt(2 * G * H * 0.92));
-                c.va += (Math.random() - 0.5) * 0.5 * f;
-            }
-            wake();
-        }
-        function reform() {
-            mode = 'reform'; reformT0 = performance.now();
-            reformEnd = SPREAD + 260 + 820;
-            fadeFrom = parseFloat(getComputedStyle(address).opacity) || 0;
-            address.style.transition = 'none';
-            for (const c of chips) {
-                c.sx = c.x; c.sy = c.y; c.k = 0;
-                // Tip first, top to bottom, with a little randomness per chip.
-                c.delay = (c.hy - TOP) / (BOTTOM - TOP) * SPREAD + Math.random() * 260;
-                c.fly = 560 + Math.random() * 260;
-                // Turn the short way home, never a full spin.
-                c.sa = Math.atan2(Math.sin(c.a), Math.cos(c.a));
-            }
-            wake();
-        }
-
-        function overLogo(x, y) {
-            return x >= ox + 60 * scale && x <= ox + 840 * scale && y >= oy + 110 * scale && y <= oy + 800 * scale;
-        }
-
-        canvas.addEventListener('click', e => {
-            if (reduceMotion) return;
-            if (mode === 'whole') {
-                if (!overLogo(e.clientX, e.clientY)) return;
-                crumble(e.clientX, e.clientY);
-            } else if (mode === 'fallen') {
-                // only the address puts the iceberg back together; anywhere else sets off a blast
-                if (overAddress(e.clientX, e.clientY)) reform();
-                else blast(e.clientX, e.clientY);
-            }
-        });
-        canvas.addEventListener('keydown', e => {
-            if (reduceMotion || (e.key !== 'Enter' && e.key !== ' ')) return;
-            e.preventDefault();
-            if (mode === 'whole') crumble(W / 2, H / 2); else if (mode === 'fallen') reform();
-        });
-        canvas.addEventListener('pointermove', e => {
-            if (e.pointerType !== 'mouse') return;
-            canvas.classList.toggle('over-logo', mode !== 'whole' || overLogo(e.clientX, e.clientY));
-        });
-
-        window.addEventListener('resize', () => {
-            const oldW = W, oldH = H;
-            layout();
-            if (mode !== 'whole') {
-                for (const c of chips) { c.x *= W / oldW; c.y *= H / oldH; }
-                wake();
-            } else draw();
-        });
-
-        layout();
-        draw();
-        if (document.fonts) document.fonts.ready.then(() => fitAddress(Math.min(W * 0.6, H * 0.6, 480)));
-    })();
-    </script>
+  layout(); ctx.drawImage(layer, 0, 0);
+  if (document.fonts) document.fonts.ready.then(() => { layout(); wake(); });
+})();
+</script>
 </body>
 </html>

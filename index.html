@@ -78,9 +78,19 @@
   for (let y = Y0; y < Y1; y += CELL) for (let x = X0; x < X1; x += CELL) {
     let ink = 0;
     for (let a = 0; a <= 7; a++) for (let b = 0; b <= 7; b++) if (ctx.isPointInPath(LOGO, x + a * 2, y + b * 2, 'evenodd')) ink++;
-    cells.push({ x, y, ink: ink > 0, inkAmount: ink, gone: false });
+    // gone: its ice is shot out; open: the white backing behind it is gone too (the address shows)
+    cells.push({ x, y, ink: ink > 0, inkAmount: ink, gone: false, open: false });
   }
   const TOTAL_INK = cells.reduce((sum, c) => sum + c.inkAmount, 0);
+  // each empty cell belongs to its nearest ice cell; in a rebuild it is covered over when that piece lands
+  const inkCells = cells.filter(c => c.ink);
+  for (const c of cells) c.followers = [];
+  for (const c of cells) {
+    if (c.ink) continue;
+    let best = null, bd = Infinity;
+    for (const k of inkCells) { const d = (k.x - c.x) ** 2 + (k.y - c.y) ** 2; if (d < bd) { bd = d; best = k; } }
+    best.followers.push(c);
+  }
 
   let W, H, dpr, scale, ox, oy, R;
   const layer = document.createElement('canvas'), lctx = layer.getContext('2d');   // the standing iceberg
@@ -107,15 +117,12 @@
     layer.width = canvas.width; layer.height = canvas.height;
     lctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     lctx.translate(ox, oy); lctx.scale(scale, scale);
-    // a white backing over the whole footprint keeps the address hidden until it is shot open
-    lctx.fillStyle = '#ffffff'; lctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
-    lctx.fillStyle = GREEN; lctx.fill(LOGO, 'evenodd');
-    lctx.globalCompositeOperation = 'destination-out';
-    // all holes are cut in one pass, as one shape, so neighbouring holes leave no hairline seams
-    const holes = new Path2D();
-    for (const c of cells) if (c.gone) holes.rect(c.x, c.y, CELL, CELL);
-    lctx.fill(holes);
-    lctx.globalCompositeOperation = 'source-over';
+    // a white backing over the whole footprint keeps the address hidden until it is shot open;
+    // the backing and the ice are each drawn in one pass, as one shape, so neighbouring cells leave no hairline seams
+    const back = new Path2D(), ice = new Path2D();
+    for (const c of cells) { if (!c.open) back.rect(c.x, c.y, CELL, CELL); if (!c.gone) ice.rect(c.x, c.y, CELL, CELL); }
+    lctx.fillStyle = '#ffffff'; lctx.fill(back);
+    lctx.save(); lctx.clip(ice); lctx.fillStyle = GREEN; lctx.fill(LOGO, 'evenodd'); lctx.restore();
   }
 
   // ---------- flying pieces ----------
@@ -132,7 +139,7 @@
       const d = Math.hypot(cx - lx, cy - ly);
       // a ragged crater: each cell's own random threshold
       if (d > reach * (0.7 + Math.random() * 0.45)) continue;
-      c.gone = true; hit++;
+      c.gone = c.open = true; hit++;
       if (!c.ink) continue;
       const f = 1 - Math.min(1, d / reach), dx = cx - lx, dy = cy - ly, dd = Math.hypot(dx, dy) || 1;
       const spread = (Math.random() - 0.5) * 1.1, kick = 0.6 + Math.random() * 0.8;
@@ -147,7 +154,7 @@
     if (!cleared && left <= TOTAL_INK * 0.05) {
       for (const c of cells) {
         if (c.gone) continue;
-        c.gone = true;
+        c.gone = c.open = true;
         if (c.ink) pieces.push({ cell: c, x: ox + (c.x + CELL / 2) * scale, y: oy + (c.y + CELL / 2) * scale, a: 0,
           vx: (Math.random() - 0.5) * 2, vy: -Math.random() * 2, va: (Math.random() - 0.5) * 0.3 });
       }
@@ -170,31 +177,70 @@
       p.vy += ((dy / d) * (2 + 6 * f)) * k - (4 + 24 * Math.pow(f, 0.7)) * kick * Math.sqrt(k);
       p.vy = Math.max(p.vy, -Math.sqrt(2 * G * H * 0.92));
       p.va += (Math.random() - 0.5) * 0.5 * f;
+      p.asleep = false; p.rest = 0;
       moved++;
     }
     if (moved) wake();
   }
 
+  // Pieces that have come to rest fall asleep: they stop moving and act as solid ground for the
+  // others, so the pile settles and stays still. A tap, a piece thrown up into them, or losing
+  // what holds them up wakes them again.
   function stepPieces(f) {
-    for (const p of pieces) {
-      if (p.home) continue;
+    const live = pieces.filter(p => !p.flying);   // pieces flying home in a rebuild move on their own
+    const floor = H - R;
+    for (const p of live) {
+      p.px = p.x; p.py = p.y; p.touch = false; p.shoved = 0; p.held = p.y >= floor - 0.5;
+      if (p.asleep) continue;
       p.vy += G * f; p.vx *= 0.99; p.x += p.vx * f; p.y += p.vy * f; p.a += p.va * f; p.va *= 0.98;
-      if (p.y > H - R) { p.y = H - R; p.vy *= -0.25; p.vx *= 0.85; p.va *= 0.7; }
+      // on the ground: a small bounce, then it slides and tumbles to a stop
+      if (p.y > floor) { p.y = floor; p.vy = p.vy > 2 ? -p.vy * 0.35 : 0; p.vx *= 0.93; p.va = p.va * 0.5 + Math.max(-0.35, Math.min(0.35, p.vx / (R * 2))) * 0.5; p.touch = true; }
       if (p.x < R) { p.x = R; p.vx *= -0.3; }
       if (p.x > W - R) { p.x = W - R; p.vx *= -0.3; }
     }
     // pieces push each other apart so they pile instead of overlapping
     const size = R * 2.4, grid = new Map(), key = (i, j) => i * 100000 + j, min = R * 1.8;
-    pieces.forEach((p, n) => { const kk = key(Math.floor(p.x / size), Math.floor(p.y / size)); if (!grid.has(kk)) grid.set(kk, []); grid.get(kk).push(n); });
-    pieces.forEach((p, n) => {
+    live.forEach((p, n) => { const kk = key(Math.floor(p.x / size), Math.floor(p.y / size)); if (!grid.has(kk)) grid.set(kk, []); grid.get(kk).push(n); });
+    live.forEach((p, n) => {
       const ci = Math.floor(p.x / size), cj = Math.floor(p.y / size);
       for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) {
         const cell = grid.get(key(i, j)); if (!cell) continue;
         for (const m of cell) {
           if (m <= n) continue;
-          const o = pieces[m], dx = o.x - p.x, dy = o.y - p.y, d2 = dx * dx + dy * dy;
-          if (d2 > 0 && d2 < min * min) {
-            const d = Math.sqrt(d2), push = (min - d) / 2, ux = dx / d, uy = dy / d;
+          const o = live[m], dx = o.x - p.x, dy = o.y - p.y, d2 = dx * dx + dy * dy;
+          // a piece resting on another is held up by it
+          // (the same test that lets a piece come to rest on another, so the two can never disagree)
+          // a moving piece sitting just on top of a resting one counts as down, so it can come to rest too
+          if (d2 < min * min * 1.3) {
+            const dd = Math.sqrt(d2);
+            if (dy > dd * 0.3) { p.held = true; if (o.asleep) p.touch = true; }
+            if (dy < -dd * 0.3) { o.held = true; if (p.asleep) o.touch = true; }
+          }
+          if (!(d2 > 0 && d2 < min * min)) continue;
+          if (p.asleep && o.asleep) continue;
+          const d = Math.sqrt(d2), ux = dx / d, uy = dy / d;
+          let a = p.asleep ? o : o.asleep ? p : null, s = a === p ? o : p;
+          // thrown up into a sleeping piece (or slammed sideways), it wakes and moves too
+          if (a && ((s.y < a.y && a.vy < -1.5) || Math.abs(a.vx) > 4)) { s.asleep = false; a = null; }
+          if (a) {
+            // a sleeping piece is solid ground: only the moving one gives way and loses its speed into it
+            const sx = a === p ? -ux : ux, sy = a === p ? -uy : uy;   // from the sleeper toward the mover
+            // eased out over a few frames, never in one jump, however many pieces it overlaps
+            const out = Math.max(0, Math.min(min - d, 3 - a.shoved)); a.shoved += out;
+            a.x += sx * out; a.y += sy * out;
+            const into = a.vx * sx + a.vy * sy;
+            // a hard hit knocks the resting piece loose: it gets part of the blow and a little pop up
+            if (into < -3) {
+              const blow = -into;
+              s.asleep = false; s.rest = 0;
+              s.vx += -sx * blow * 0.35 + (Math.random() - 0.5) * blow * 0.3;
+              s.vy += -sy * blow * 0.2 - blow * 0.25;
+              s.va += (Math.random() - 0.5) * 0.4;
+            }
+            if (into < 0) { a.vx -= sx * into * 0.8; a.vy -= sy * into * 0.8; }
+            a.vx *= 0.9; a.va *= 0.8;
+          } else {
+            const push = Math.min((min - d) / 2, 1);
             p.x -= ux * push; p.y -= uy * push; o.x += ux * push; o.y += uy * push;
             const rv = (o.vx - p.vx) * ux + (o.vy - p.vy) * uy;
             if (rv < 0) { p.vx += ux * rv * .5; p.vy += uy * rv * .5; o.vx -= ux * rv * .5; o.vy -= uy * rv * .5; }
@@ -202,9 +248,20 @@
         }
       }
     });
-    let fastest = 0;
-    for (const p of pieces) fastest = Math.max(fastest, Math.abs(p.vx), Math.abs(p.vy));
-    return fastest;
+    let awake = 0;
+    for (const p of live) {
+      if (p.asleep) {
+        // whatever held it up has moved away: it falls again
+        if (!p.held) { p.asleep = false; awake++; }
+        continue;
+      }
+      p.y = Math.min(p.y, floor); p.x = Math.max(R, Math.min(W - R, p.x));
+      // once it is down (on the ground or on top of a resting piece) and has been slow for a moment, it stops for good
+      p.rest = (p.touch || p.y >= floor - 0.5) && Math.hypot(p.vx, p.vy) < 0.8 ? (p.rest || 0) + 1 : 0;
+      if (p.rest >= 4) { p.asleep = true; p.vx = p.vy = p.va = 0; }
+      else awake++;
+    }
+    return awake;
   }
 
   function drawPiece(p) {
@@ -218,51 +275,68 @@
   }
 
   // ---------- rebuild: every piece flies back to the hole it came from ----------
+  // Tip first, each piece takes off from wherever it is, keeping the speed it already has (so a
+  // piece still falling curves smoothly instead of snapping), with a small hop, and glides into its
+  // hole, slowing to a stop as it arrives. As each piece lands, the white behind it and around it
+  // fades back in, so the address is covered over by the returning iceberg.
+  const COVER = 200;   // ms for the white to fade back in behind a landed piece
   let rebuilding = false, rebuildT0 = 0, cleared = false, clearT0 = 0, backing = 1;
   function rebuild() {
     if (rebuilding || !cleared) return;
     // the layer is empty by now (see the clear fade), so turning it back on shows nothing until pieces land
     cleared = false; backing = 1;
     rebuilding = true; rebuildT0 = performance.now();
-    const top = Y0, span = Y1 - Y0;
+    const k = Math.sqrt(H / 900);
     for (const p of pieces) {
-      p.sx = p.x; p.sy = p.y; p.sa = Math.atan2(Math.sin(p.a), Math.cos(p.a));
-      p.delay = (p.cell.y - top) / span * 700 + Math.random() * 200; p.fly = 550 + Math.random() * 250; p.k = 0;
+      p.delay = 120 + (p.cell.y - Y0) / (Y1 - Y0) * 650 + Math.random() * 150;
+      p.fly = 700 + Math.random() * 200; p.hop = (2.5 + Math.random() * 2) * k;
+      p.flying = false; p.landed = false;
     }
     wake();
   }
   function stepRebuild(now) {
     const t = now - rebuildT0;
-    let done = true;
-    for (const p of pieces) {
-      p.k = Math.max(0, Math.min(1, (t - p.delay) / p.fly));
-      const e = 1 - Math.pow(1 - p.k, 3);
-      const hx = ox + (p.cell.x + CELL / 2) * scale, hy = oy + (p.cell.y + CELL / 2) * scale;
-      p.x = p.sx + (hx - p.sx) * e; p.y = p.sy + (hy - p.sy) * e; p.a = p.sa * (1 - e);
-      if (p.k < 1) done = false;
+    let done = true, changed = false;
+    // white that has finished fading in becomes part of the iceberg
+    for (const c of cells) if (c.coverT0 !== undefined) {
+      if (t - c.coverT0 >= COVER) { c.open = false; c.coverT0 = undefined; changed = true; } else done = false;
     }
-    // landed pieces fill their holes for good; the white backing behind them returns row by row,
-    // just behind the landing pieces, so the address is covered from the tip down
-    const sweep = Y0 + (t - 760) / 700 * (Y1 - Y0);
-    let changed = false;
-    for (const p of pieces) if (p.k >= 1 && p.cell.gone) { p.cell.gone = false; changed = true; }
-    for (const c of cells) if (c.gone && !c.ink && c.y + CELL <= sweep) { c.gone = false; changed = true; }
+    for (const p of pieces) {
+      if (p.landed) continue;
+      done = false;
+      if (!p.flying) {
+        if (t < p.delay) continue;   // still on the ground (or still falling) until its turn
+        p.flying = true; p.t0 = t;
+        p.sx = p.x; p.sy = p.y; p.sa = Math.atan2(Math.sin(p.a), Math.cos(p.a));
+        // its own speed, capped so a fast faller does not swing wide; a resting piece hops off the ground
+        const sp = Math.hypot(p.vx, p.vy), cap = sp > 14 ? 14 / sp : 1, n = p.fly / 16.7;
+        p.tx = p.vx * cap * n; p.ty = (p.vy * cap - (p.asleep ? p.hop : 0)) * n; p.ta = Math.max(-0.3, Math.min(0.3, p.va)) * n;
+      }
+      const u = Math.min(1, (t - p.t0) / p.fly), u2 = u * u, u3 = u2 * u;
+      const h00 = 2 * u3 - 3 * u2 + 1, h10 = u3 - 2 * u2 + u, h01 = 3 * u2 - 2 * u3;
+      const hx = ox + (p.cell.x + CELL / 2) * scale, hy = oy + (p.cell.y + CELL / 2) * scale;
+      p.x = h00 * p.sx + h10 * p.tx + h01 * hx; p.y = h00 * p.sy + h10 * p.ty + h01 * hy;
+      p.a = h00 * p.sa + h10 * p.ta;
+      if (u >= 1) {
+        p.landed = true; p.cell.gone = false; changed = true;
+        for (const c of [p.cell, ...p.cell.followers]) if (c.open) c.coverT0 = t;
+      }
+    }
     if (changed) paintLayer();
     if (done) {
-      for (const c of cells) c.gone = false;
+      for (const c of cells) { c.gone = c.open = false; c.coverT0 = undefined; }
       pieces.length = 0; paintLayer(); rebuilding = false;
     }
   }
 
   // ---------- loop ----------
-  let running = false, last = 0, quiet = 0, shake = 0;
-  function wake() { quiet = 0; if (!running) { running = true; last = 0; requestAnimationFrame(frame); } }
+  let running = false, last = 0, shake = 0;
+  function wake() { if (!running) { running = true; last = 0; requestAnimationFrame(frame); } }
   function frame(now) {
     const dt = last ? Math.min(50, now - last) : 16.7; last = now;
     const f = dt / 16.7;
-    let fastest = 0;
-    if (rebuilding) stepRebuild(now); else fastest = stepPieces(f);
-    quiet = fastest < 0.08 ? quiet + 1 : 0;
+    const awake = stepPieces(f);
+    if (rebuilding) stepRebuild(now);
     ctx.clearRect(0, 0, W, H);
     // a small jolt of the standing iceberg on each hit
     let sx = 0, sy = 0;
@@ -270,12 +344,28 @@
     if (cleared && backing > 0) {
       backing = Math.max(0, 1 - (now - clearT0) / 450);
       // once faded, empty the layer for good so nothing can reappear when it is switched back on
-      if (backing === 0) { for (const c of cells) c.gone = true; paintLayer(); }
+      if (backing === 0) { for (const c of cells) c.gone = c.open = true; paintLayer(); }
     }
+    if (rebuilding) drawCovering(now - rebuildT0);
     ctx.save(); ctx.globalAlpha = backing; ctx.setTransform(1, 0, 0, 1, sx * dpr, sy * dpr); ctx.drawImage(layer, 0, 0); ctx.restore();
-    for (const p of pieces) if (!(rebuilding && p.k >= 1)) drawPiece(p);
-    if (!rebuilding && quiet > 60 && shake <= 0 && !(cleared && backing > 0)) { running = false; return; }
+    for (const p of pieces) if (!p.landed) drawPiece(p);
+    if (!rebuilding && awake === 0 && shake <= 0 && !(cleared && backing > 0)) { running = false; return; }
     requestAnimationFrame(frame);
+  }
+
+  // the white fading back in under freshly landed pieces, grouped by how far along it is so each
+  // group is one shape (no seams inside a group); it sits under the ice, which the layer draws on top
+  function drawCovering(t) {
+    const groups = new Map();
+    for (const c of cells) if (c.coverT0 !== undefined) {
+      const g = Math.min(8, Math.max(1, Math.ceil((t - c.coverT0) / COVER * 8)));
+      if (!groups.has(g)) groups.set(g, new Path2D());
+      groups.get(g).rect(c.x, c.y, CELL, CELL);
+    }
+    if (!groups.size) return;
+    ctx.save(); ctx.translate(ox, oy); ctx.scale(scale, scale); ctx.fillStyle = '#ffffff';
+    for (const [g, path] of groups) { ctx.globalAlpha = g / 8; ctx.fill(path); }
+    ctx.restore();
   }
 
   function onAddress(x, y) {
@@ -301,7 +391,7 @@
     const c = left[Math.floor(left.length / 2)];
     if (c) blast(ox + (c.x + CELL / 2) * scale, oy + (c.y + CELL / 2) * scale);
   });
-  addEventListener('resize', () => { layout(); for (const p of pieces) { p.x = Math.min(p.x, W - R); p.y = Math.min(p.y, H - R); } wake(); });
+  addEventListener('resize', () => { layout(); for (const p of pieces) { p.x = Math.min(p.x, W - R); p.y = Math.min(p.y, H - R); p.asleep = false; } wake(); });
 
   layout(); ctx.drawImage(layer, 0, 0);
   if (document.fonts) document.fonts.ready.then(() => { layout(); wake(); });
